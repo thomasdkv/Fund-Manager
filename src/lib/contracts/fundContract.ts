@@ -1,57 +1,141 @@
-import {
-  Contract,
-  Provider,
-  Account,
-  constants,
-  uint256,
-  shortString,
-} from "starknet";
+import { Contract, Provider, Account, uint256, shortString } from "starknet";
 
 const FUND_ABI = [
   {
-    name: "create_fund",
-    type: "function",
-    inputs: [
-      { name: "name", type: "felt" },
-      { name: "description", type: "felt" },
-      { name: "approval_threshold", type: "felt" },
-      { name: "transparency", type: "felt" },
-    ],
-    outputs: [{ name: "fund_id", type: "felt" }],
+    type: "constructor",
+    name: "constructor",
+    inputs: [],
   },
   {
-    name: "contribute",
     type: "function",
-    inputs: [
-      { name: "fund_id", type: "felt" },
-      { name: "amount", type: "felt" },
-    ],
+    name: "interact",
+    inputs: [],
     outputs: [],
+    state_mutability: "external",
   },
   {
-    name: "get_fund_balance",
     type: "function",
-    inputs: [{ name: "fund_id", type: "felt" }],
-    outputs: [{ name: "balance", type: "felt" }],
-  },
-  {
-    name: "get_contributor_count",
-    type: "function",
-    inputs: [{ name: "fund_id", type: "felt" }],
-    outputs: [{ name: "count", type: "felt" }],
-  },
-  {
-    name: "get_fund_details",
-    type: "function",
-    inputs: [{ name: "fund_id", type: "felt" }],
-    outputs: [
-      { name: "name", type: "felt" },
-      { name: "description", type: "felt" },
-      { name: "approval_threshold", type: "felt" },
-      { name: "transparency", type: "felt" },
-      { name: "balance", type: "felt" },
-      { name: "contributor_count", type: "felt" },
+    name: "createFund",
+    inputs: [
+      {
+        name: "name",
+        type: "core::felt252",
+      },
+      {
+        name: "request_percent",
+        type: "core::integer::u256",
+      },
     ],
+    outputs: [
+      {
+        type: "core::integer::u32",
+      },
+    ],
+    state_mutability: "external",
+  },
+  {
+    type: "function",
+    name: "getFundName",
+    inputs: [
+      {
+        name: "entry",
+        type: "core::integer::u32",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::felt252",
+      },
+    ],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "getFundOwner",
+    inputs: [
+      {
+        name: "entry",
+        type: "core::integer::u32",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+    ],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "getFundAmount",
+    inputs: [
+      {
+        name: "entry",
+        type: "core::integer::u32",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::integer::u256",
+      },
+    ],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "getFundPercent",
+    inputs: [
+      {
+        name: "entry",
+        type: "core::integer::u32",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::integer::u256",
+      },
+    ],
+    state_mutability: "view",
+  },
+  {
+    type: "function",
+    name: "pay",
+    inputs: [
+      {
+        name: "recipient",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "sender",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "amount",
+        type: "core::integer::u256",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::bool",
+      },
+    ],
+    state_mutability: "external",
+  },
+  {
+    type: "function",
+    name: "balance",
+    inputs: [
+      {
+        name: "wallet",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+    ],
+    outputs: [
+      {
+        type: "core::integer::u256",
+      },
+    ],
+    state_mutability: "view",
   },
 ];
 
@@ -64,32 +148,57 @@ export class FundContract {
     this.account = account;
   }
 
-  async createFund(
-    name: string,
-    description: string,
-    approvalThreshold: number,
-    transparency: string,
-  ) {
+  async createFund(name: string, approvalThreshold: number) {
     try {
-      // Convert strings to felt representation
+      console.log("Creating fund with raw params:", {
+        name,
+        approvalThreshold,
+        type: typeof approvalThreshold
+      });
+
+      // Basic validation
+      if (!name || name.trim() === "") {
+        throw new Error("Fund name is required");
+      }
+
+      // Convert name to felt
       const nameStr = shortString.encodeShortString(name);
-      const descStr = shortString.encodeShortString(description);
-      const transparencyStr = shortString.encodeShortString(transparency);
+
+      // Convert approval threshold to uint256
+      const threshold = Number(approvalThreshold);
+      if (isNaN(threshold)) {
+        throw new Error("Approval threshold must be a valid number");
+      }
+
+      const thresholdUint256 = {
+        low: threshold.toString(),
+        high: "0",
+      };
+
+      console.log("Processed parameters:", {
+        nameStr,
+        thresholdUint256,
+        contractAddress: this.contract.address,
+      });
 
       // Execute the transaction
       const { transaction_hash } = await this.account.execute({
         contractAddress: this.contract.address,
-        entrypoint: "create_fund",
-        calldata: [nameStr, descStr, approvalThreshold, transparencyStr],
+        entrypoint: "createFund",
+        calldata: [nameStr, thresholdUint256.low, thresholdUint256.high],
       });
+
+      console.log("Transaction submitted:", transaction_hash);
 
       // Wait for transaction confirmation
       await this.account.waitForTransaction(transaction_hash);
+      console.log("Transaction confirmed");
 
       // Get fund ID from transaction receipt
       const receipt =
         await this.account.provider.getTransactionReceipt(transaction_hash);
       const fundId = receipt.events?.[0]?.data?.[0] || "0";
+      console.log("Fund created with ID:", fundId);
 
       return fundId;
     } catch (error) {
@@ -102,31 +211,33 @@ export class FundContract {
 
   async contribute(fundId: string, amount: string) {
     try {
-      // Convert amount to wei and ensure it's a valid number
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error("Invalid amount");
-      }
-
-      // Convert to wei with proper decimal handling
-      const amountInWei = BigInt(Math.floor(parsedAmount * 10 ** 18));
+      // Convert amount to uint256
+      const amountInWei = BigInt(Math.floor(parseFloat(amount) * 10 ** 18));
+      const amountUint256 = {
+        low: amountInWei.toString(),
+        high: "0",
+      };
 
       // Execute the transaction
-      const response = await this.account.execute({
+      const { transaction_hash } = await this.account.execute({
         contractAddress: this.contract.address,
-        entrypoint: "contribute",
-        calldata: [fundId, amountInWei.toString()],
+        entrypoint: "pay",
+        calldata: [
+          this.contract.address, // recipient (fund contract)
+          this.account.address, // sender
+          amountUint256.low,
+          amountUint256.high,
+        ],
       });
 
       // Wait for transaction confirmation
-      await this.account.waitForTransaction(response.transaction_hash);
+      await this.account.waitForTransaction(transaction_hash);
 
       // Get updated fund details
-      const fundDetails = await this.getFundDetails(fundId);
+      const balance = await this.getFundBalance(fundId);
       return {
-        transaction_hash: response.transaction_hash,
-        balance: fundDetails.balance,
-        contributorCount: fundDetails.contributorCount,
+        transaction_hash,
+        balance,
       };
     } catch (error) {
       console.error("Error contributing to fund:", error);
@@ -138,8 +249,11 @@ export class FundContract {
 
   async getFundBalance(fundId: string): Promise<string> {
     try {
-      const result = await this.contract.call("get_fund_balance", [fundId]);
-      const balanceInWei = BigInt(result.balance);
+      const result = await this.contract.call("getFundAmount", [fundId]);
+      const balanceInWei = uint256.uint256ToBN({
+        low: result[0],
+        high: result[1],
+      });
       return (balanceInWei / BigInt(10 ** 18)).toString();
     } catch (error) {
       console.error("Error getting fund balance:", error);
@@ -147,31 +261,36 @@ export class FundContract {
     }
   }
 
-  async getContributorCount(fundId: string): Promise<number> {
+  async getFundName(fundId: string): Promise<string> {
     try {
-      const result = await this.contract.call("get_contributor_count", [
-        fundId,
-      ]);
-      return Number(result.count);
+      const result = await this.contract.call("getFundName", [fundId]);
+      return shortString.decodeShortString(result[0]);
     } catch (error) {
-      console.error("Error getting contributor count:", error);
+      console.error("Error getting fund name:", error);
       throw error;
     }
   }
 
-  async getFundDetails(fundId: string) {
+  async getFundOwner(fundId: string): Promise<string> {
     try {
-      const result = await this.contract.call("get_fund_details", [fundId]);
-      return {
-        name: shortString.decodeShortString(result.name),
-        description: shortString.decodeShortString(result.description),
-        approvalThreshold: Number(result.approval_threshold),
-        transparency: shortString.decodeShortString(result.transparency),
-        balance: (BigInt(result.balance) / BigInt(10 ** 18)).toString(),
-        contributorCount: Number(result.contributor_count),
-      };
+      const result = await this.contract.call("getFundOwner", [fundId]);
+      return result[0];
     } catch (error) {
-      console.error("Error getting fund details:", error);
+      console.error("Error getting fund owner:", error);
+      throw error;
+    }
+  }
+
+  async getFundPercent(fundId: string): Promise<number> {
+    try {
+      const result = await this.contract.call("getFundPercent", [fundId]);
+      const percent = uint256.uint256ToBN({
+        low: result[0],
+        high: result[1],
+      });
+      return Number(percent); // Return as whole number
+    } catch (error) {
+      console.error("Error getting fund percent:", error);
       throw error;
     }
   }

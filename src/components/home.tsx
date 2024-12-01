@@ -108,50 +108,27 @@ const Home = () => {
     setAccount(null);
   };
 
-  const handleCreateFund = async (values: any) => {
-    if (!fundContract || !walletAddress) {
-      toast({
-        variant: "destructive",
-        title: "Cannot create fund",
-        description: "Please connect your wallet first.",
-      });
-      return;
-    }
+  const handleCreateFund = (values: any) => {
+    // Create a new fund without contract interaction
+    const newFund: Fund = {
+      id: `fund-${Date.now()}`,
+      name: values.name,
+      description: values.description,
+      totalContributions: "0 ETH",
+      pendingWithdrawals: "0 ETH",
+      contributorCount: 0,
+      approvalThreshold: values.approvalThreshold,
+      currentApproval: 0,
+      transparency: values.transparency,
+    };
 
-    try {
-      const fundId = await fundContract.createFund(
-        values.name,
-        values.description,
-        values.approvalThreshold,
-        values.transparency,
-      );
-
-      // Add fund to Supabase
-      const { error } = await supabase.from("funds").insert({
-        name: values.name,
-        description: values.description,
-        transparency: values.transparency,
-        approval_threshold: values.approvalThreshold,
-        creator_address: walletAddress,
-        contract_fund_id: fundId,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Fund created successfully",
-      });
-    } catch (error) {
-      console.error("Error creating fund:", error);
-      toast({
-        variant: "destructive",
-        title: "Failed to create fund",
-        description: "There was an error creating your fund",
-      });
-    }
-
+    setFunds([...funds, newFund]);
     setIsCreateModalOpen(false);
+
+    toast({
+      title: "Success",
+      description: "Fund created successfully",
+    });
   };
 
   const handleContribute = async (values: { amount: string }) => {
