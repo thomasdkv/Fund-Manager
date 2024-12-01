@@ -6,8 +6,8 @@ interface HeaderProps {
   onWalletConnect?: () => void;
   onWalletDisconnect?: () => void;
   walletAddress?: string;
-  walletBalance?: string;
   networkStatus?: "connected" | "disconnected" | "connecting";
+  account?: any;
 }
 
 const Header = ({
@@ -15,8 +15,8 @@ const Header = ({
   onWalletConnect = () => {},
   onWalletDisconnect = () => {},
   walletAddress = "0x1234...5678",
-  walletBalance = "0.00 ETH",
   networkStatus = "disconnected",
+  account,
 }: HeaderProps) => {
   return (
     <header className="w-full h-[72px] bg-slate-900 border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between">
@@ -32,8 +32,8 @@ const Header = ({
         onConnect={onWalletConnect}
         onDisconnect={onWalletDisconnect}
         address={walletAddress}
-        balance={walletBalance}
         networkStatus={networkStatus}
+        account={account}
       />
     </header>
   );

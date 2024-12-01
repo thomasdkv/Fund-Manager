@@ -10,6 +10,7 @@ import ContributeModal from "./dashboard/ContributeModal";
 import ApprovalInterface from "./dashboard/ApprovalInterface";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabase/client";
+import { Account } from "starknet";
 
 interface Fund {
   id: string;
@@ -57,27 +58,33 @@ const Home = () => {
     useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("all");
+  const [account, setAccount] = useState<Account | null>(null);
 
   const handleWalletConnect = async () => {
     try {
       setNetworkStatus("connecting");
-      const { address, provider, account } = await connectBraavos();
+      const {
+        address,
+        provider,
+        account: connectedAccount,
+      } = await connectBraavos();
       setWalletAddress(address);
       setIsWalletConnected(true);
       setNetworkStatus("connected");
+      setAccount(connectedAccount);
 
       // Initialize contracts with actual addresses
       const withdrawalContract = new WithdrawalRequestContract(
         "0x682a6b082e08d46a0d38481ffc1f6053b6e02ad586a3a3244828783a2df67fd",
         provider,
-        account,
+        connectedAccount,
       );
       setWithdrawalContract(withdrawalContract);
 
       const fundContract = new FundContract(
         "0x0704e5b3236f53220bd9cdac4856d44d5546715b10d16bbfb276ccb3fc342102",
         provider,
-        account,
+        connectedAccount,
       );
       setFundContract(fundContract);
     } catch (error) {
@@ -98,6 +105,7 @@ const Home = () => {
     setNetworkStatus("disconnected");
     setWithdrawalContract(null);
     setFundContract(null);
+    setAccount(null);
   };
 
   const handleCreateFund = async (values: any) => {
@@ -450,6 +458,7 @@ const Home = () => {
         onWalletDisconnect={handleWalletDisconnect}
         walletAddress={walletAddress}
         networkStatus={networkStatus}
+        account={account}
       />
 
       <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-4 p-4">
