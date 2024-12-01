@@ -76,24 +76,27 @@ export class FundContract {
       const descStr = shortString.encodeShortString(description);
       const transparencyStr = shortString.encodeShortString(transparency);
 
+      // Execute the transaction
       const { transaction_hash } = await this.account.execute({
         contractAddress: this.contract.address,
         entrypoint: "create_fund",
         calldata: [nameStr, descStr, approvalThreshold, transparencyStr],
       });
 
-      // Wait for transaction to be accepted
+      // Wait for transaction confirmation
       await this.account.waitForTransaction(transaction_hash);
 
-      // Get the fund ID from the transaction receipt
+      // Get fund ID from transaction receipt
       const receipt =
         await this.account.provider.getTransactionReceipt(transaction_hash);
-      const fundId = receipt.events[0].data[0]; // Assuming first event data is fund ID
+      const fundId = receipt.events?.[0]?.data?.[0] || "0";
 
       return fundId;
     } catch (error) {
       console.error("Error creating fund:", error);
-      throw error;
+      throw new Error(
+        error instanceof Error ? error.message : "Failed to create fund",
+      );
     }
   }
 

@@ -66,15 +66,16 @@ const Home = () => {
       setIsWalletConnected(true);
       setNetworkStatus("connected");
 
+      // Initialize contracts with actual addresses
       const withdrawalContract = new WithdrawalRequestContract(
-        import.meta.env.VITE_CONTRACT_ADDRESS || "",
+        "0x682a6b082e08d46a0d38481ffc1f6053b6e02ad586a3a3244828783a2df67fd",
         provider,
         account,
       );
       setWithdrawalContract(withdrawalContract);
 
       const fundContract = new FundContract(
-        import.meta.env.VITE_FUND_CONTRACT_ADDRESS || "",
+        "0x0704e5b3236f53220bd9cdac4856d44d5546715b10d16bbfb276ccb3fc342102",
         provider,
         account,
       );
