@@ -50,9 +50,9 @@ const RequestCard = ({
   };
 
   return (
-    <Card className="w-full bg-slate-900 border-slate-800 p-4">
-      <div className="flex flex-col space-y-4">
-        <div className="flex justify-between items-start">
+    <Card className="w-full bg-slate-900 border-slate-800 p-4 flex flex-col">
+      <div className="flex flex-col space-y-3 flex-1">
+        <div className="flex justify-between items-start w-full">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <WalletIcon className="h-4 w-4 text-slate-400" />
@@ -60,7 +60,7 @@ const RequestCard = ({
                 {amount}
               </span>
             </div>
-            <p className="text-sm text-slate-400">{reason}</p>
+            <p className="text-sm text-slate-400 line-clamp-2">{reason}</p>
           </div>
           <span
             className={`text-sm font-medium capitalize ${getStatusColor()}`}
@@ -69,46 +69,46 @@ const RequestCard = ({
           </span>
         </div>
 
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <div className="flex items-center gap-2">
-            <span>Requested by: {requester}</span>
-            <span className="text-slate-600">|</span>
-            <div className="flex items-center gap-1">
-              <CalendarIcon className="h-3 w-3" />
-              {date}
-            </div>
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <span className="truncate">Requested by: {requester}</span>
+          <span className="text-slate-600">|</span>
+          <div className="flex items-center gap-1">
+            <CalendarIcon className="h-3 w-3" />
+            {date}
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 w-full">
           <div className="flex justify-between items-center text-xs text-slate-400">
             <span>
               {approvalCount} of {requiredCount} required approvals
             </span>
             <span>{approvalPercentage.toFixed(1)}% approved</span>
           </div>
-          <Progress value={approvalPercentage} className="h-2" />
+          <Progress value={approvalPercentage} className="h-1.5" />
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            onClick={onApprove}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-            disabled={status !== "pending"}
-          >
-            <ThumbsUpIcon className="mr-2 h-4 w-4" />
-            Approve
-          </Button>
-          <Button
-            onClick={onReject}
-            variant="destructive"
-            className="flex-1"
-            disabled={status !== "pending"}
-          >
-            <ThumbsDownIcon className="mr-2 h-4 w-4" />
-            Reject
-          </Button>
-        </div>
+        {status === "pending" && (
+          <div className="flex gap-2 w-full">
+            <Button
+              onClick={onApprove}
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs w-24"
+            >
+              <ThumbsUpIcon className="mr-1 h-3 w-3" />
+              Approve
+            </Button>
+            <Button
+              onClick={onReject}
+              size="sm"
+              variant="destructive"
+              className="h-7 px-2 text-xs w-24"
+            >
+              <ThumbsDownIcon className="mr-1 h-3 w-3" />
+              Reject
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );

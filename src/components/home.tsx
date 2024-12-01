@@ -35,6 +35,7 @@ interface WithdrawalRequest {
   totalVotes: number;
   requiredApprovals: number;
   status: "pending" | "approved" | "rejected";
+  fundId: string; // Add fundId to track which fund the request belongs to
 }
 
 const Home = () => {
@@ -72,21 +73,6 @@ const Home = () => {
       setIsWalletConnected(true);
       setNetworkStatus("connected");
       setAccount(connectedAccount);
-
-      // Initialize contracts with actual addresses
-      const withdrawalContract = new WithdrawalRequestContract(
-        "0x682a6b082e08d46a0d38481ffc1f6053b6e02ad586a3a3244828783a2df67fd",
-        provider,
-        connectedAccount,
-      );
-      setWithdrawalContract(withdrawalContract);
-
-      const fundContract = new FundContract(
-        "0x0704e5b3236f53220bd9cdac4856d44d5546715b10d16bbfb276ccb3fc342102",
-        provider,
-        connectedAccount,
-      );
-      setFundContract(fundContract);
     } catch (error) {
       console.error("Failed to connect wallet:", error);
       setNetworkStatus("disconnected");
@@ -131,301 +117,155 @@ const Home = () => {
     });
   };
 
-  const handleContribute = async (values: { amount: string }) => {
-    if (!fundContract || !selectedFundForContribution || !walletAddress) {
-      toast({
-        variant: "destructive",
-        title: "Cannot contribute",
-        description: "Please connect your wallet first.",
-      });
-      return;
-    }
+  const handleContribute = (values: { amount: string }) => {
+    const fund = funds.find((f) => f.id === selectedFundForContribution);
+    if (!fund) return;
 
-    try {
-      const result = await fundContract.contribute(
-        selectedFundForContribution,
-        values.amount,
-      );
+    // Update fund's total contributions
+    const currentAmount = parseFloat(fund.totalContributions.split(" ")[0]);
+    const contributionAmount = parseFloat(values.amount);
+    const newAmount = currentAmount + contributionAmount;
 
-      // Record contribution in Supabase
-      const { error } = await supabase.from("contributions").insert({
-        fund_id: selectedFundForContribution,
-        contributor_address: walletAddress,
-        amount: values.amount,
-        transaction_hash: result.transaction_hash,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: `Successfully contributed ${values.amount} ETH`,
-      });
-    } catch (error) {
-      console.error("Error contributing to fund:", error);
-      toast({
-        variant: "destructive",
-        title: "Failed to contribute",
-        description: "There was an error processing your contribution",
-      });
-    }
+    setFunds(
+      funds.map((f) => {
+        if (f.id === selectedFundForContribution) {
+          return {
+            ...f,
+            totalContributions: `${newAmount} ETH`,
+            contributorCount: f.contributorCount + 1,
+          };
+        }
+        return f;
+      }),
+    );
 
     setIsContributeModalOpen(false);
+
+    toast({
+      title: "Success",
+      description: `Successfully contributed ${values.amount} ETH`,
+    });
   };
 
-  const handleWithdrawalRequest = async (values: any) => {
-    if (!withdrawalContract || !selectedFundId || !walletAddress) {
+  const handleWithdrawalRequest = (values: any) => {
+    const fund = funds.find((f) => f.id === selectedFundId);
+    if (!fund) return;
+
+    // Check if withdrawal amount is less than or equal to total contributions
+    const totalContributions = parseFloat(
+      fund.totalContributions.split(" ")[0],
+    );
+    const withdrawalAmount = parseFloat(values.amount);
+
+    if (withdrawalAmount > totalContributions) {
       toast({
         variant: "destructive",
-        title: "Cannot submit request",
-        description: "Please connect your wallet first.",
+        title: "Invalid withdrawal amount",
+        description: "Withdrawal amount cannot exceed total contributions",
       });
       return;
     }
 
-    try {
-      const result = await withdrawalContract.submitRequest(
-        selectedFundId,
-        values.amount,
-        values.reason,
-      );
+    // Create new withdrawal request
+    const newRequest: WithdrawalRequest = {
+      id: `request-${Date.now()}`,
+      amount: `${values.amount} ETH`,
+      reason: values.reason,
+      requester: walletAddress || "Anonymous",
+      date: new Date().toLocaleDateString(),
+      approvalCount: 0,
+      rejectionCount: 0,
+      totalVotes: fund.contributorCount,
+      requiredApprovals: Math.ceil(
+        fund.contributorCount * (fund.approvalThreshold / 100),
+      ),
+      status: "pending",
+      fundId: selectedFundId, // Store the fund ID with the request
+    };
 
-      // Record withdrawal request in Supabase
-      const { error } = await supabase.from("withdrawal_requests").insert({
-        fund_id: selectedFundId,
-        requester_address: walletAddress,
-        amount: values.amount,
-        reason: values.reason,
-        transaction_hash: result.transaction_hash,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Withdrawal request submitted successfully",
-      });
-    } catch (error) {
-      console.error("Error submitting withdrawal request:", error);
-      toast({
-        variant: "destructive",
-        title: "Failed to submit request",
-        description: "There was an error submitting your withdrawal request",
-      });
-    }
-
+    setWithdrawalRequests([...withdrawalRequests, newRequest]);
     setIsWithdrawalModalOpen(false);
+
+    toast({
+      title: "Success",
+      description: "Withdrawal request submitted successfully",
+    });
   };
 
   const handleOpenContributeModal = (fundId: string) => {
-    if (!isWalletConnected) {
-      toast({
-        variant: "destructive",
-        title: "Wallet not connected",
-        description: "Please connect your wallet to contribute.",
-      });
-      return;
-    }
     setSelectedFundForContribution(fundId);
     setIsContributeModalOpen(true);
   };
 
   const handleRequestWithdrawal = (fundId: string) => {
-    if (!isWalletConnected) {
-      toast({
-        variant: "destructive",
-        title: "Wallet not connected",
-        description: "Please connect your wallet to request a withdrawal.",
-      });
-      return;
-    }
     setSelectedFundId(fundId);
     setIsWithdrawalModalOpen(true);
   };
 
-  const handleApproveRequest = async (requestId: string) => {
-    if (!withdrawalContract || !walletAddress) {
-      toast({
-        variant: "destructive",
-        title: "Cannot approve",
-        description: "Please connect your wallet first.",
-      });
-      return;
-    }
+  const handleApproveRequest = (requestId: string) => {
+    const request = withdrawalRequests.find((r) => r.id === requestId);
+    if (!request) return;
 
-    try {
-      const result = await withdrawalContract.approveRequest(requestId);
+    setWithdrawalRequests((requests) =>
+      requests.map((request) => {
+        if (request.id === requestId) {
+          const newApprovalCount = request.approvalCount + 1;
+          const isApproved = newApprovalCount >= request.requiredApprovals;
 
-      // Record vote in Supabase
-      const { error } = await supabase.from("request_votes").insert({
-        request_id: requestId,
-        voter_address: walletAddress,
-        vote_type: "approve",
-      });
+          // If approved, update the fund's total contributions
+          if (isApproved) {
+            const withdrawalAmount = parseFloat(request.amount.split(" ")[0]);
+            setFunds((funds) =>
+              funds.map((fund) => {
+                if (fund.id === request.fundId) {
+                  const currentAmount = parseFloat(
+                    fund.totalContributions.split(" ")[0],
+                  );
+                  return {
+                    ...fund,
+                    totalContributions: `${Math.max(0, currentAmount - withdrawalAmount)} ETH`,
+                  };
+                }
+                return fund;
+              }),
+            );
+          }
 
-      if (error) throw error;
+          return {
+            ...request,
+            approvalCount: newApprovalCount,
+            status: isApproved ? "approved" : "pending",
+          };
+        }
+        return request;
+      }),
+    );
 
-      toast({
-        title: "Success",
-        description: "Successfully approved the withdrawal request",
-      });
-    } catch (error) {
-      console.error("Error approving request:", error);
-      toast({
-        variant: "destructive",
-        title: "Failed to approve",
-        description: "Could not process your approval",
-      });
-    }
+    toast({
+      title: "Success",
+      description: "Successfully approved the withdrawal request",
+    });
   };
 
-  const handleRejectRequest = async (requestId: string) => {
-    if (!withdrawalContract || !walletAddress) {
-      toast({
-        variant: "destructive",
-        title: "Cannot reject",
-        description: "Please connect your wallet first.",
-      });
-      return;
-    }
+  const handleRejectRequest = (requestId: string) => {
+    setWithdrawalRequests((requests) =>
+      requests.map((request) => {
+        if (request.id === requestId) {
+          return {
+            ...request,
+            rejectionCount: request.rejectionCount + 1,
+            status: "rejected", // Immediately mark as rejected
+          };
+        }
+        return request;
+      }),
+    );
 
-    try {
-      const result = await withdrawalContract.rejectRequest(requestId);
-
-      // Record vote in Supabase
-      const { error } = await supabase.from("request_votes").insert({
-        request_id: requestId,
-        voter_address: walletAddress,
-        vote_type: "reject",
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Successfully rejected the withdrawal request",
-      });
-    } catch (error) {
-      console.error("Error rejecting request:", error);
-      toast({
-        variant: "destructive",
-        title: "Failed to reject",
-        description: "Could not process your rejection",
-      });
-    }
+    toast({
+      title: "Success",
+      description: "Successfully rejected the withdrawal request",
+    });
   };
-
-  // Set up real-time subscriptions
-  useEffect(() => {
-    const fetchFunds = async () => {
-      const { data: fundsData, error: fundsError } = await supabase
-        .from("funds")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (fundsError) {
-        console.error("Error fetching funds:", fundsError);
-        return;
-      }
-
-      if (fundsData) {
-        setFunds(
-          fundsData.map((fund) => ({
-            id: fund.id,
-            name: fund.name,
-            description: fund.description,
-            totalContributions: `${fund.total_contributions} ETH`,
-            pendingWithdrawals: `${fund.pending_withdrawals} ETH`,
-            contributorCount: fund.contributor_count,
-            approvalThreshold: fund.approval_threshold,
-            currentApproval: 0,
-            transparency: fund.transparency,
-          })),
-        );
-      }
-    };
-
-    const fetchWithdrawalRequests = async () => {
-      const { data: requestsData, error: requestsError } = await supabase
-        .from("withdrawal_requests")
-        .select(
-          `
-          *,
-          request_votes (vote_type)
-        `,
-        )
-        .order("created_at", { ascending: false });
-
-      if (requestsError) {
-        console.error("Error fetching withdrawal requests:", requestsError);
-        return;
-      }
-
-      if (requestsData) {
-        setWithdrawalRequests(
-          requestsData.map((request) => ({
-            id: request.id,
-            amount: `${request.amount} ETH`,
-            reason: request.reason,
-            requester: request.requester_address,
-            date: new Date(request.created_at).toLocaleDateString(),
-            approvalCount:
-              request.request_votes?.filter(
-                (vote) => vote.vote_type === "approve",
-              ).length || 0,
-            rejectionCount:
-              request.request_votes?.filter(
-                (vote) => vote.vote_type === "reject",
-              ).length || 0,
-            totalVotes: 100,
-            requiredApprovals: 75,
-            status: request.status,
-          })),
-        );
-      }
-    };
-
-    // Subscribe to funds changes
-    const fundsSubscription = supabase
-      .channel("funds_channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "funds" },
-        () => fetchFunds(),
-      )
-      .subscribe();
-
-    // Subscribe to withdrawal requests changes
-    const requestsSubscription = supabase
-      .channel("requests_channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "withdrawal_requests" },
-        () => fetchWithdrawalRequests(),
-      )
-      .subscribe();
-
-    // Subscribe to votes changes
-    const votesSubscription = supabase
-      .channel("votes_channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "request_votes" },
-        () => fetchWithdrawalRequests(),
-      )
-      .subscribe();
-
-    // Initial data fetch
-    fetchFunds();
-    fetchWithdrawalRequests();
-
-    // Cleanup subscriptions
-    return () => {
-      fundsSubscription.unsubscribe();
-      requestsSubscription.unsubscribe();
-      votesSubscription.unsubscribe();
-    };
-  }, []);
 
   return (
     <div className="w-screen h-screen bg-slate-950 flex flex-col overflow-hidden">
